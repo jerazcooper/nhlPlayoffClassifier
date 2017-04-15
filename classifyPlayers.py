@@ -110,6 +110,7 @@ def import_player_file(file):
     title = ['Team', 'Player', 'Pos', 'GP', 'Goals', 'Assists', 'Points', 'PM', 'PIM', 'TOI', 'Blocks', 'Hits']
     forward_df = normalize(pd.DataFrame(forwards, columns=title))
     dims = forward_df[['Goals', 'Assists', 'PM', 'PIM', 'Blocks', 'Hits']]
+    print(dims)
     k_means = KMeans(n_clusters=4).fit(dims)
     centers = k_means.cluster_centers_
     # top-line = 0, second = 1, def = 2, phys = 3
@@ -122,7 +123,7 @@ def import_player_file(file):
     hits_index = 0
     max_hits_2 = 0
     hits_index_2 = 0
-
+    print(k_means.labels_)
     for i, center in enumerate(centers):
         if center[0] > max_goals:
             max_goals = center[0]
@@ -205,4 +206,4 @@ def import_player_file(file):
     print(defence_df.head())
     return {'forward': forward_df, 'defence': defence_df}
 
-import_player_file('NHL11.csv')
+import_player_file('NHL16.csv')
