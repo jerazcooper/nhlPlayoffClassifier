@@ -7,7 +7,7 @@ from sklearn.neural_network import MLPClassifier
 from numpy import mean
 import pandas as pd
 
-YEAR = 1980
+YEAR = 1990
 
 with open('Teams.csv', newline='') as f:
     reader = csv.reader(f)

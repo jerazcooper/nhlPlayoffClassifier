@@ -3,99 +3,206 @@ from sklearn.cluster import KMeans
 import pandas as pd
 import numpy as np
 
-forwards = []
-defence = []
-with open('NHL07.csv', newline='') as f:
-    reader = csv.reader(f)
-    for row in reader:
-        try:
-            row[6] = float(row[6])    # games played
-            row[7] = float(row[7])    # goals
-            row[8] = float(row[8])    # assists
-            row[10] = float(row[10])  # plus minus
-            row[11] = float(row[11])  # penalty minutes
-            row[14] = float(row[14])  # time on ice
-            row[47] = float(row[47])  # blocks
-            row[48] = float(row[48])  # hits
-            row[99] = float(row[99])  # nat
-        except ValueError:
+
+def normalize(data):
+    for i, f in data.iterrows():
+        data.set_value(i, 'Goals', 60 * f[4] / f[9])
+        data.set_value(i, 'Assists', 60 * f[5] / f[9])
+        data.set_value(i, 'Points', 60 * f[6] / f[9])
+        data.set_value(i, 'PM', 60 * f[7] / f[9])
+        data.set_value(i, 'PIM', 60 * f[8] / f[9])
+        data.set_value(i, 'Blocks', 60 * f[10] / f[9])
+        data.set_value(i, 'Hits', 60 * f[11] / f[9])
+
+    means = [np.mean(data['Goals']), np.mean(data['Assists']),
+             np.mean(data['Points']), np.mean(data['PM']),
+             np.mean(data['PIM']), np.mean(data['Blocks']),
+             np.mean(data['Hits'])]
+    std_dev = [np.std(data['Goals']), np.std(data['Assists']),
+               np.std(data['Points']), np.std(data['PM']),
+               np.std(data['PIM']), np.std(data['Blocks']),
+               np.std(data['Hits'])]
+
+    for i, f in data.iterrows():
+        data.set_value(i, 'Goals', (f[4] - means[0]) / std_dev[0])
+        data.set_value(i, 'Assists', (f[5] - means[1]) / std_dev[1])
+        data.set_value(i, 'Points', (f[6] - means[2]) / std_dev[2])
+        data.set_value(i, 'PM', (f[7] - means[3]) / std_dev[3])
+        data.set_value(i, 'PIM', (f[8] - means[4]) / std_dev[4])
+        data.set_value(i, 'Blocks', (f[10] - means[5]) / std_dev[5])
+        data.set_value(i, 'Hits', (f[11] - means[6]) / std_dev[6])
+
+    return data
+
+
+def import_player_file(file):
+    forwards = []
+    defence = []
+    with open(file, newline='') as f:
+        reader = csv.reader(f)
+        row1 = next(reader)
+
+        # indices
+        team = 0
+        name = 0
+        pos = 0
+        gp = 0
+        goals = 0
+        assists = 0
+        points = 0
+        plus = 0
+        pim = 0
+        toi = 0
+        blocks = 0
+        hits = 0
+        nat = 0
+
+        for index, i in enumerate(row1):
+            if (('Tm' in i) | ('Team' in i)) & (team == 0):
+                team = index
+            elif ((i == 'Player') | ('Name' in i)) & (name == 0):
+                name = index
+            elif i == 'Pos':
+                pos = index
+            elif (i == 'GP') & (gp == 0):
+                gp = index
+            elif (i == 'G') & (goals == 0):
+                goals = index
+            elif (i == 'A') & (assists == 0):
+                assists = index
+            elif (i == 'PTS') & (points == 0):
+                points = index
+            elif i == '+/-':
+                plus = index
+            elif i == 'PIM':
+                pim = index
+            elif i == 'TMOI':
+                toi = index
+            elif i == 'BkS':
+                blocks = index
+            elif i == 'Hits':
+                hits = index
+            elif i == 'Nat':
+                nat = index
+
+        for row in reader:
+            try:
+                row[gp] = float(row[gp])  # games played
+                row[goals] = float(row[goals])  # goals
+                row[assists] = float(row[assists])  # assists
+                row[points] = float(row[points])  # points
+                row[plus] = float(row[plus])  # plus minus
+                row[pim] = float(row[pim])  # penalty minutes
+                row[toi] = float(row[toi])  # time on ice
+                row[blocks] = float(row[blocks])  # blocks
+                row[hits] = float(row[hits])  # hits
+                if nat != 0:
+                    row[nat] = float(row[nat])  # nat
+            except ValueError:
+                continue
+
+            r = [row[team], row[name], row[pos], row[gp], row[goals], row[assists], row[points],
+                 row[plus], row[pim], row[toi], row[blocks], row[hits]]
+            if (row[gp] > 30) & (nat == 0 | (row[nat] == 0) | (row[nat] == 2)) & ('D' not in row[pos]):
+                forwards.append(r)
+            elif (row[gp] > 30) & (nat == 0 | (row[nat] == 0) | (row[nat] == 2)) & ('D' in row[pos]):
+                defence.append(r)
+    title = ['Team', 'Player', 'Pos', 'GP', 'Goals', 'Assists', 'Points', 'PM', 'PIM', 'TOI', 'Blocks', 'Hits']
+    forward_df = normalize(pd.DataFrame(forwards, columns=title))
+    dims = forward_df[['Goals', 'Assists', 'PM', 'PIM', 'Blocks', 'Hits']]
+    k_means = KMeans(n_clusters=4).fit(dims)
+    centers = k_means.cluster_centers_
+    # top-line = 0, second = 1, def = 2, phys = 3
+    mapping = [0, 0, 0, 0]
+    max_goals = 0
+    goals_index = 0
+    max_blocks = 0
+    blocks_index = 0
+    max_hits = 0
+    hits_index = 0
+    max_hits_2 = 0
+    hits_index_2 = 0
+
+    for i, center in enumerate(centers):
+        if center[0] > max_goals:
+            max_goals = center[0]
+            goals_index = i
+        if center[4] > max_blocks:
+            max_blocks = center[4]
+            blocks_index = i
+        if center[5] > max_hits:
+            max_hits = center[5]
+            hits_index = i
+        elif center[5] > max_hits_2:
+            max_hits_2 = center[5]
+            hits_index_2 = i
+
+    if hits_index == blocks_index:
+        blocks_index = hits_index_2
+
+    assert goals_index != blocks_index
+    assert goals_index != hits_index
+    assert hits_index != blocks_index
+    second_index = 0
+    for j in range(4):
+        if (j == goals_index) | (j == hits_index) | (j == blocks_index):
             continue
-        if (row[6] > 20) & ((row[99] == 0) | (row[99] == 2)) & (row[4] != 'D '):
-            r = [row[0], row[3], row[4], row[6], row[7], row[8],
-                 row[10], row[11], row[14], row[47], row[48]]
-            forwards.append(r)
-        elif (row[6] > 20) & ((row[99] == 0) | (row[99] == 2)) & (row[4] == 'D '):
-            r = [row[0], row[3], row[4], row[6], row[7], row[8],
-                 row[10], row[11], row[14], row[47], row[48]]
-            defence.append(r)
+        else:
+            second_index = j
+            break
+    mapping[goals_index] = 0
+    mapping[second_index] = 1
+    mapping[blocks_index] = 2
+    mapping[hits_index] = 3
+    forward_df['Type'] = list(map(lambda x: mapping[x], k_means.labels_))
+    defence_df = normalize(pd.DataFrame(defence, columns=title))
+    dims = defence_df[['Points', 'PM', 'PIM', 'Blocks', 'Hits']]
+    k_means = KMeans(n_clusters=4).fit(dims)
+    centers = k_means.cluster_centers_
+    # offencive = 0, defencive = 1, average = 2, phys = 3
+    mapping = [0, 0, 0, 0]
+    max_points = 0
+    points_index = 0
+    max_blocks = 0
+    blocks_index = 0
+    max_hits = 0
+    hits_index = 0
+    max_hits_2 = 0
+    hits_index_2 = 0
+    print(centers)
+    for i, center in enumerate(centers):
+        if center[0] > max_points:
+            max_points = center[0]
+            points_index = i
+        if center[3] > max_blocks:
+            max_blocks = center[3]
+            blocks_index = i
+        if center[4] > max_hits:
+            max_hits = center[4]
+            hits_index = i
+        elif center[4] > max_hits_2:
+            max_hits_2 = center[4]
+            hits_index_2 = i
 
-# Normalize
-title = ['Team', 'Player', 'Pos', 'GP', 'Goals', 'Assists', 'PM', 'PIM', 'TOI', 'Blocks', 'Hits']
-forwardDf = pd.DataFrame(forwards, columns=title)
-for i, f in forwardDf.iterrows():
-    forwardDf.set_value(i, 'Goals', 60 * f[4] / f[8])
-    forwardDf.set_value(i, 'Assists', 60 * f[5] / f[8])
-    forwardDf.set_value(i, 'PM', 60 * f[6] / f[8])
-    forwardDf.set_value(i, 'PIM', 60 * f[7] / f[8])
-    forwardDf.set_value(i, 'Blocks', 60 * f[9] / f[8])
-    forwardDf.set_value(i, 'Hits', 60 * f[10] / f[8])
+    if hits_index == blocks_index:
+        blocks_index = hits_index_2
 
-means = [np.mean(forwardDf['Goals']), np.mean(forwardDf['Assists']),
-         np.mean(forwardDf['PM']), np.mean(forwardDf['PIM']),
-         np.mean(forwardDf['Blocks']), np.mean(forwardDf['Hits'])]
-stdDev = [np.std(forwardDf['Goals']), np.std(forwardDf['Assists']),
-          np.std(forwardDf['PM']), np.std(forwardDf['PIM']),
-          np.std(forwardDf['Blocks']), np.std(forwardDf['Hits'])]
+    assert points_index != blocks_index
+    assert points_index != hits_index
+    assert hits_index != blocks_index
+    average_index = 0
+    for j in range(4):
+        if (j == points_index) | (j == hits_index) | (j == blocks_index):
+            continue
+        else:
+            average_index = j
+            break
+    mapping[points_index] = 0
+    mapping[blocks_index] = 1
+    mapping[average_index] = 2
+    mapping[hits_index] = 3
+    defence_df['Type'] = list(map(lambda x: mapping[x], k_means.labels_))
+    print(defence_df.head())
+    return {'forward': forward_df, 'defence': defence_df}
 
-for i, f in forwardDf.iterrows():
-    forwardDf.set_value(i, 'Goals', (f[4] - means[0]) / stdDev[0])
-    forwardDf.set_value(i, 'Assists', (f[5] - means[1]) / stdDev[1])
-    forwardDf.set_value(i, 'PM', (f[6] - means[2]) / stdDev[2])
-    forwardDf.set_value(i, 'PIM', (f[7] - means[3]) / stdDev[3])
-    forwardDf.set_value(i, 'Blocks', (f[9] - means[4]) / stdDev[4])
-    forwardDf.set_value(i, 'Hits', (f[10] - means[5]) / stdDev[5])
-
-dims = forwardDf[['Goals', 'Assists', 'PM', 'PIM', 'Blocks', 'Hits']]
-kmeans = KMeans(n_clusters=4).fit(dims)
-
-centers = kmeans.cluster_centers_
-print(kmeans.labels_)
-
-# top-line = 0, second = 1, def = 2, phys = 3
-mapping = [0, 0, 0, 0]
-
-maxGoals = 0
-goalsIndex = 0
-maxBlocks = 0
-blocksIndex = 0
-maxHits = 0
-hitsIndex = 0
-for i, center in enumerate(centers):
-    if center[0] > maxGoals:
-        maxGoals = center[0]
-        goalsIndex = i
-    if center[4] > maxBlocks:
-        maxBlocks = center[4]
-        blocksIndex = i
-    if center[5] > maxHits:
-        maxBlocks = center[5]
-        blocksIndex = i
-
-assert goalsIndex != blocksIndex
-assert goalsIndex != hitsIndex
-assert hitsIndex != blocksIndex
-
-secondIndex = 0
-for j in range(4):
-    if (j == goalsIndex) | (j == hitsIndex) | (j == blocksIndex):
-        continue
-    else:
-        secondIndex = j
-        break
-
-
-mapping[0] = goalsIndex
-mapping[1] = secondIndex
-mapping[2] = blocksIndex
-mapping[3] = hitsIndex
-print(mapping)
+import_player_file('NHL11.csv')
