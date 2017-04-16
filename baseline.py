@@ -7,7 +7,7 @@ from sklearn.neural_network import MLPClassifier
 from numpy import mean
 import pandas as pd
 
-YEAR = 1990
+YEAR = 2007
 
 with open('Teams.csv', newline='') as f:
     reader = csv.reader(f)
@@ -41,7 +41,7 @@ with open('Teams.csv', newline='') as f:
     # decision tree
     clf = tree.DecisionTreeClassifier()
     val = []
-    for _ in range(0, 30):
+    for _ in range(100):
         val.append(c(clf=clf, data=df, features=features))
     print('Decision tree', mean(val))
     clf.fit(df[features], df['Playoffs'])
@@ -50,13 +50,13 @@ with open('Teams.csv', newline='') as f:
     # random forest
     clf = RandomForestClassifier(n_jobs=2)
     val = []
-    for _ in range(0, 30):
+    for _ in range(100):
         val.append(c(clf=clf, data=df, features=features))
     print('Random forest', mean(val))
 
     # Neural net
     clf = clf = MLPClassifier()
     val = []
-    for _ in range(0, 30):
+    for _ in range(100):
         val.append(c(clf=clf, data=df, features=features))
     print('Neural Network', mean(val))

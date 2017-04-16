@@ -103,14 +103,13 @@ def import_player_file(file):
 
             r = [row[team], row[name], row[pos], row[gp], row[goals], row[assists], row[points],
                  row[plus], row[pim], row[toi], row[blocks], row[hits]]
-            if (row[gp] > 30) & (nat == 0 | (row[nat] == 0) | (row[nat] == 2)) & ('D' not in row[pos]):
+            if (row[gp] > 10) & ((nat == 0) | (row[nat] == 0) | (row[nat] == 2)) & ('D' not in row[pos]):
                 forwards.append(r)
-            elif (row[gp] > 30) & (nat == 0 | (row[nat] == 0) | (row[nat] == 2)) & ('D' in row[pos]):
+            elif (row[gp] > 10) & ((nat == 0) | (row[nat] == 0) | (row[nat] == 2)) & ('D' in row[pos]):
                 defence.append(r)
     title = ['Team', 'Player', 'Pos', 'GP', 'Goals', 'Assists', 'Points', 'PM', 'PIM', 'TOI', 'Blocks', 'Hits']
     forward_df = normalize(pd.DataFrame(forwards, columns=title))
     dims = forward_df[['Goals', 'Assists', 'PM', 'PIM', 'Blocks', 'Hits']]
-    print(dims)
     k_means = KMeans(n_clusters=4).fit(dims)
     centers = k_means.cluster_centers_
     # top-line = 0, second = 1, def = 2, phys = 3
@@ -123,7 +122,6 @@ def import_player_file(file):
     hits_index = 0
     max_hits_2 = 0
     hits_index_2 = 0
-    print(k_means.labels_)
     for i, center in enumerate(centers):
         if center[0] > max_goals:
             max_goals = center[0]
@@ -132,6 +130,8 @@ def import_player_file(file):
             max_blocks = center[4]
             blocks_index = i
         if center[5] > max_hits:
+            max_hits_2 = max_hits
+            hits_index_2 = hits_index
             max_hits = center[5]
             hits_index = i
         elif center[5] > max_hits_2:
@@ -170,7 +170,6 @@ def import_player_file(file):
     hits_index = 0
     max_hits_2 = 0
     hits_index_2 = 0
-    print(centers)
     for i, center in enumerate(centers):
         if center[0] > max_points:
             max_points = center[0]
@@ -179,6 +178,8 @@ def import_player_file(file):
             max_blocks = center[3]
             blocks_index = i
         if center[4] > max_hits:
+            max_hits_2 = max_hits
+            hits_index_2 = hits_index
             max_hits = center[4]
             hits_index = i
         elif center[4] > max_hits_2:
@@ -203,7 +204,10 @@ def import_player_file(file):
     mapping[average_index] = 2
     mapping[hits_index] = 3
     defence_df['Type'] = list(map(lambda x: mapping[x], k_means.labels_))
-    print(defence_df.head())
-    return {'forward': forward_df, 'defence': defence_df}
+    # print(defence_df)
 
-import_player_file('NHL16.csv')
+    return {'forward': forward_df.sort_values(by='GP', ascending=False),
+            'defence': defence_df.sort_values(by='GP', ascending=False)}
+
+
+
